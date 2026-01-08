@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CodeBid Connection Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a1a; color: white; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #333; border-radius: 5px; }
+        .success { border-color: green; background: rgba(0,255,0,0.1); }
+        .error { border-color: red; background: rgba(255,0,0,0.1); }
+        button { padding: 10px 20px; margin: 5px; background: #0066cc; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; background: #333; color: white; border: 1px solid #555; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>CodeBid Connection Test</h1>
+    
+    <div class="test">
+        <h3>1. Backend Health Check</h3>
+        <button onclick="testBackend()">Test Backend</button>
+        <div id="backend-result"></div>
+    </div>
+
+    <div class="test">
+        <h3>2. Frontend Proxy Test</h3>
+        <button onclick="testProxy()">Test Proxy</button>
+        <div id="proxy-result"></div>
+    </div>
+
+    <div class="test">
+        <h3>3. User Registration Test</h3>
+        <input type="text" id="teamName" placeholder="Enter team name" value="DebugUser">
+        <button onclick="testRegistration()">Register Team</button>
+        <div id="registration-result"></div>
+    </div>
+
+    <div class="test">
+        <h3>4. Current Users</h3>
+        <button onclick="listUsers()">List All Users</button>
+        <div id="users-result"></div>
+    </div>
+
+    <script>
+        async function testBackend() {
+            const result = document.getElementById('backend-result');
+            try {
+                const response = await fetch('http://localhost:4000/health');
+                const data = await response.json();
+                result.innerHTML = `<span style="color: green;">✅ Backend OK: ${JSON.stringify(data)}</span>`;
+                result.parentElement.className = 'test success';
+            } catch (error) {
+                result.innerHTML = `<span style="color: red;">❌ Backend Error: ${error.message}</span>`;
+                result.parentElement.className = 'test error';
+            }
+        }
+
+        async function testProxy() {
+            const result = document.getElementById('proxy-result');
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                result.innerHTML = `<span style="color: green;">✅ Proxy OK: ${JSON.stringify(data)}</span>`;
+                result.parentElement.className = 'test success';
+            } catch (error) {
+                result.innerHTML = `<span style="color: red;">❌ Proxy Error: ${error.message}</span>`;
+                result.parentElement.className = 'test error';
+            }
+        }
+
+        async function testRegistration() {
+            const result = document.getElementById('registration-result');
+            const teamName = document.getElementById('teamName').value;
+            
+            if (!teamName.trim()) {
+                result.innerHTML = '<span style="color: orange;">⚠️ Please enter a team name</span>';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: teamName.trim() })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+                
+                const data = await response.json();
+                result.innerHTML = `<span style="color: green;">✅ Registration OK: Team "${data.team.name}" created with ${data.team.coins} coins</span>`;
+                result.parentElement.className = 'test success';
+            } catch (error) {
+                result.innerHTML = `<span style="color: red;">❌ Registration Error: ${error.message}</span>`;
+                result.parentElement.className = 'test error';
+                console.error('Registration error:', error);
+            }
+        }
+
+        async function listUsers() {
+            const result = document.getElementById('users-result');
+            try {
+                // First login as admin to get token
+                const loginResponse = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: 'admin' })
+                });
+                const loginData = await loginResponse.json();
+                
+                // Then get users list
+                const usersResponse = await fetch('/api/admin/teams', {
+                    headers: { 'Authorization': `Bearer ${loginData.token}` }
+                });
+                const users = await usersResponse.json();
+                
+                const usersList = users.filter(u => !u.is_admin).map(u => 
+                    `<li>${u.name} (${u.coins} coins) - ${new Date(u.created_at).toLocaleString()}</li>`
+                ).join('');
+                
+                result.innerHTML = `<span style="color: green;">✅ Found ${users.filter(u => !u.is_admin).length} users:</span><ul>${usersList}</ul>`;
+                result.parentElement.className = 'test success';
+            } catch (error) {
+                result.innerHTML = `<span style="color: red;">❌ Users Error: ${error.message}</span>`;
+                result.parentElement.className = 'test error';
+            }
+        }
+
+        // Auto-run tests on page load
+        window.onload = function() {
+            testBackend();
+            testProxy();
+        };
+    </script>
+</body>
+</html>
