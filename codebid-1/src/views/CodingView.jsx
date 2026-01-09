@@ -1,36 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { useAuction } from '../context/AuctionContext';
+import CodeEditor from '../components/CodeEditor';
 
 const CodingView = () => {
     const { state, solveProblem } = useAuction();
-    const { user } = state;
+    const { user, auction } = state;
     const [activeProblem, setActiveProblem] = useState(null);
-    const [code, setCode] = useState('');
-    const [output, setOutput] = useState('');
-    const [isRunning, setIsRunning] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     if (!user) return <div className="flex-center" style={{ height: '100vh' }}>Error: User not logged in.</div>;
 
-    useEffect(() => {
-        if (activeProblem) {
-            setCode(activeProblem.starterCode || '# Write your code here');
-            setOutput('');
+    const handleSubmit = async (submission) => {
+        try {
+            setLoading(true);
+            // Submit solution to backend
+            const response = await fetch('/api/code/submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    ...submission,
+                    eventId: 1
+                })
+            });
+
+            if (response.ok) {
+                alert('✅ Solution submitted successfully!');
+                solveProblem(activeProblem.id);
+                setActiveProblem(null);
+            }
+        } catch (error) {
+            alert(`❌ Submission failed: ${error.message}`);
+        } finally {
+            setLoading(false);
         }
-    }, [activeProblem]);
-
-    const handleRun = () => {
-        setIsRunning(true);
-        setOutput('Running tests...');
-        setTimeout(() => {
-            setIsRunning(false);
-            setOutput('Test Case 1: PASSED\nTest Case 2: PASSED\nTest Case 3: PASSED\n\n> All Tests Passed!');
-        }, 1500);
-    };
-
-    const handleSubmit = () => {
-        if (!activeProblem) return;
-        solveProblem(activeProblem.id);
-        setActiveProblem(null); // Return to dashboard
     };
 
     // --- DASHBOARD VIEW (NO ACTIVE PROBLEM) ---
@@ -61,14 +66,14 @@ const CodingView = () => {
                 </header>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '2rem' }}>
-                    {user.purchasedProblems.length === 0 ? (
+                    {user.purchasedProblems && user.purchasedProblems.length === 0 ? (
                         <div className="glass-panel" style={{ padding: '3rem', gridColumn: '1 / -1', textAlign: 'center' }}>
                             <h2 style={{ marginBottom: '1rem' }}>No Problems Purchased</h2>
                             <p style={{ color: 'var(--color-text-muted)', marginBottom: '2rem' }}>You didn't win any auctions. Better luck next time!</p>
                             <div style={{ fontSize: '3rem' }}>👾</div>
                         </div>
                     ) : (
-                        user.purchasedProblems.map(problem => (
+                        user.purchasedProblems?.map(problem => (
                             <div key={problem.id} className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', border: problem.status === 'SOLVED' ? '1px solid var(--color-success)' : '1px solid rgba(255,255,255,0.05)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <span style={{ fontWeight: 'bold', color: 'var(--color-primary)' }}>#{problem.id}</span>
@@ -114,65 +119,18 @@ const CodingView = () => {
             {/* Toolbar */}
             <div className="glass-panel" style={{ padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', borderRadius: 0, borderBottom: '1px solid var(--color-border)' }}>
                 <div className="flex-center" style={{ gap: '1rem' }}>
-                    <button onClick={() => setActiveProblem(null)} style={{ background: 'transparent', color: 'var(--color-text-muted)' }}>← Back</button>
+                    <button onClick={() => setActiveProblem(null)} style={{ background: 'transparent', color: 'var(--color-text-muted)', cursor: 'pointer', border: 'none', fontSize: '1rem' }}>← Back</button>
                     <h3>{activeProblem.title}</h3>
-                </div>
-                <div className="flex-center" style={{ gap: '1rem' }}>
-                    <button onClick={handleRun} disabled={isRunning} style={{ padding: '0.5rem 1.5rem', background: 'var(--color-bg-card)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', borderRadius: '4px' }}>
-                        {isRunning ? 'Running...' : 'Run Code'}
-                    </button>
-                    <button onClick={handleSubmit} style={{ padding: '0.5rem 1.5rem', background: 'var(--color-success)', color: '#000', fontWeight: 'bold', borderRadius: '4px' }}>
-                        Submit
-                    </button>
                 </div>
             </div>
 
-            {/* Split View */}
-            <div style={{ flex: 1, display: 'flex' }}>
-                {/* Left: Description */}
-                <div style={{ width: '40%', padding: '2rem', borderRight: '1px solid var(--color-border)', overflowY: 'auto' }}>
-                    <h4 style={{ color: 'var(--color-text-muted)', marginBottom: '1rem' }}>PROBLEM STATEMENT</h4>
-                    <p style={{ lineHeight: '1.8', fontSize: '1.1rem' }}>{activeProblem.description}</p>
-
-                    <div style={{ marginTop: '2rem' }}>
-                        <h4 style={{ color: 'var(--color-text-muted)', marginBottom: '0.5rem' }}>Example 1</h4>
-                        <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', fontFamily: 'monospace' }}>
-                            Input: root = [4,2,7,1,3,6,9]<br />
-                            Output: [4,7,2,9,6,3,1]
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right: Code & Output */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    {/* Code Editor */}
-                    <div style={{ flex: 2, display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ padding: '0.5rem 1rem', background: '#000', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>solution.py</div>
-                        <textarea
-                            value={code}
-                            onChange={(e) => setCode(e.target.value)}
-                            style={{
-                                flex: 1,
-                                background: '#1e1e1e',
-                                color: '#d4d4d4',
-                                border: 'none',
-                                padding: '1rem',
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: '1rem',
-                                resize: 'none'
-                            }}
-                            spellCheck="false"
-                        />
-                    </div>
-
-                    {/* Console Output */}
-                    <div style={{ flex: 1, background: '#000', padding: '1rem', fontFamily: 'var(--font-mono)', fontSize: '0.9rem', borderTop: '1px solid var(--color-border)' }}>
-                        <div style={{ color: 'var(--color-text-muted)', marginBottom: '0.5rem' }}>CONSOLE OUTPUT</div>
-                        <pre style={{ whiteSpace: 'pre-wrap', color: output.includes('Passed') ? 'var(--color-success)' : '#fff' }}>
-                            {output || 'Run code to see output...'}
-                        </pre>
-                    </div>
-                </div>
+            {/* Code Editor Component */}
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+                <CodeEditor
+                    problem={activeProblem}
+                    onSubmit={handleSubmit}
+                    loading={loading}
+                />
             </div>
         </div>
     );
