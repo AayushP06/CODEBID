@@ -13,6 +13,7 @@ const initialState = {
     highestBidderName: null,
     timeLeft: null,     // endsIn seconds from backend
   },
+  leaderboard: [],      // Live leaderboard data
   messages: [],
 };
 
@@ -23,6 +24,7 @@ const ACTIONS = {
   LOGOUT: "LOGOUT",
   ADD_MESSAGE: "ADD_MESSAGE",
   UPDATE_WALLET: "UPDATE_WALLET",
+  UPDATE_LEADERBOARD: "UPDATE_LEADERBOARD",
 };
 
 // --- REDUCER ---
@@ -69,6 +71,12 @@ function reducer(state, action) {
 
     case ACTIONS.LOGOUT:
       return { ...initialState };
+
+    case ACTIONS.UPDATE_LEADERBOARD:
+      return {
+        ...state,
+        leaderboard: action.payload
+      };
 
     default:
       return state;
@@ -124,6 +132,14 @@ export function AuctionProvider({ children }) {
           type: "info",
           timestamp: data.timestamp
         },
+      });
+    });
+
+    // Live leaderboard updates
+    s.on("LEADERBOARD_UPDATED", (leaderboard) => {
+      dispatch({
+        type: ACTIONS.UPDATE_LEADERBOARD,
+        payload: leaderboard
       });
     });
 

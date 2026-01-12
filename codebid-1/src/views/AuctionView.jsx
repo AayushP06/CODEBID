@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuction } from "../context/AuctionContext";
+import LiveLeaderboard from "../components/LiveLeaderboard";
 
 const AuctionView = () => {
   const { state, placeBid } = useAuction();
@@ -105,7 +106,7 @@ const AuctionView = () => {
       </header>
 
       {/* Main Content Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 350px", gap: "2rem", alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 350px 300px", gap: "2rem", alignItems: "start" }}>
         {/* Left: Problem Card */}
         <div className="glass-panel" style={{ padding: "3rem", position: "relative", overflow: "hidden" }}>
           {/* Timer Badge */}
@@ -303,6 +304,9 @@ const AuctionView = () => {
             ))}
           </div>
         </div>
+
+        {/* Right: Live Leaderboard */}
+        <LiveLeaderboard />
       </div>
     </div>
   );

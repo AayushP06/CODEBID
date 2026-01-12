@@ -78,6 +78,10 @@ export function initSocket(server) {
           timestamp: new Date().toISOString()
         });
 
+        // Broadcast updated leaderboard to all clients
+        const leaderboard = await Team.getLeaderboard();
+        io.to("auction").emit("LEADERBOARD_UPDATED", leaderboard);
+
         callback({ ok: true });
       } catch (error) {
         console.error("Place bid error:", error);
