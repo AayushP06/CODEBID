@@ -2,7 +2,14 @@
 CREATE TABLE IF NOT EXISTS teams (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
+    full_name VARCHAR(255),
+    registration_number VARCHAR(100) UNIQUE,
+    branch VARCHAR(100),
+    email VARCHAR(255),
+    phone VARCHAR(20),
+    year_of_study INTEGER,
     coins INTEGER DEFAULT 1000,
+    score INTEGER DEFAULT 0,
     is_admin BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -16,16 +23,18 @@ CREATE TABLE IF NOT EXISTS problems (
     difficulty VARCHAR(50) DEFAULT 'medium',
     test_cases JSONB,
     solution TEXT,
+    base_points INTEGER DEFAULT 100,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Events table (for auction rounds)
 CREATE TABLE IF NOT EXISTS events (
     id SERIAL PRIMARY KEY,
-    state VARCHAR(50) DEFAULT 'WAITING', -- WAITING, AUCTION, CODING, COMPLETED
+    state VARCHAR(50) DEFAULT 'WAITING', -- WAITING, AUCTION, CODING, COMPLETED, FINISHED
     current_problem_id INTEGER REFERENCES problems(id),
     highest_bid INTEGER DEFAULT 0,
     highest_bidder_id INTEGER REFERENCES teams(id),
+    auction_timer INTEGER DEFAULT 60,
     auction_start_time TIMESTAMP,
     coding_start_time TIMESTAMP,
     coding_end_time TIMESTAMP,

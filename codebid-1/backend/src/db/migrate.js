@@ -12,7 +12,7 @@ async function runMigrations() {
 
     // Read and execute init.sql
     const initSql = fs.readFileSync(
-      path.join(__dirname, "../../../sql/001_init.sql"),
+      path.join(__dirname, "../sql/001_init.sql"),
       "utf8"
     );
     await pool.query(initSql);
@@ -20,7 +20,7 @@ async function runMigrations() {
 
     // Read and execute seed.sql
     const seedSql = fs.readFileSync(
-      path.join(__dirname, "../../../sql/002_seed.sql"),
+      path.join(__dirname, "../sql/002_seed.sql"),
       "utf8"
     );
     await pool.query(seedSql);

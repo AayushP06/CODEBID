@@ -1,9 +1,13 @@
 import React from 'react';
+import { useAuction } from '../context/AuctionContext';
 
 const LandingView = ({ onSelectRole }) => {
     const [showAuth, setShowAuth] = React.useState(false);
     const [password, setPassword] = React.useState('');
     const [error, setError] = React.useState('');
+
+    const { login } = useAuction();
+    const [isLoggingIn, setIsLoggingIn] = React.useState(false);
 
     const handleAdminClick = () => {
         setShowAuth(true);
@@ -11,10 +15,19 @@ const LandingView = ({ onSelectRole }) => {
         setPassword('');
     };
 
-    const handleAuthSubmit = (e) => {
+    const handleAuthSubmit = async (e) => {
         e.preventDefault();
         if (password === 'code@bid123') {
-            onSelectRole('ADMIN');
+            try {
+                setIsLoggingIn(true);
+                await login('admin');
+                onSelectRole('ADMIN');
+            } catch (err) {
+                console.error("Admin login failed:", err);
+                setError('Login failed: ' + (err.message || 'Unknown error'));
+            } finally {
+                setIsLoggingIn(false);
+            }
         } else {
             setError('Incorrect Password');
         }
@@ -70,7 +83,14 @@ const LandingView = ({ onSelectRole }) => {
                                     autoFocus
                                 />
                                 {error && <div style={{ color: 'var(--color-primary)', fontSize: '0.9rem', textAlign: 'center' }}>{error}</div>}
-                                <button type="submit" className="hero-btn" style={{ width: '100%' }}>LOGIN</button>
+                                <button
+                                    type="submit"
+                                    className="hero-btn"
+                                    style={{ width: '100%', opacity: isLoggingIn ? 0.7 : 1 }}
+                                    disabled={isLoggingIn}
+                                >
+                                    {isLoggingIn ? 'LOGGING IN...' : 'LOGIN'}
+                                </button>
                             </form>
                         </div>
                     </div>

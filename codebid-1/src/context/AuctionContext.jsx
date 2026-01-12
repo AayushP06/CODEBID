@@ -99,7 +99,7 @@ export function AuctionProvider({ children }) {
     s.on("connect", () => {
       s.emit("JOIN_AUCTION");
       // refresh after reconnect so UI is always correct
-      loadEventState().catch(() => {});
+      loadEventState().catch(() => { });
     });
 
     // Live highest bid updates for everyone
@@ -119,8 +119,8 @@ export function AuctionProvider({ children }) {
       // Add message to activity log
       dispatch({
         type: ACTIONS.ADD_MESSAGE,
-        payload: { 
-          text: `💰 ${data.teamName} bid ${data.amount} coins`, 
+        payload: {
+          text: `💰 ${data.teamName} bid ${data.amount} coins`,
           type: "info",
           timestamp: data.timestamp
         },
@@ -145,7 +145,7 @@ export function AuctionProvider({ children }) {
         });
       }
       // refresh state after auction ends
-      loadEventState().catch(() => {});
+      loadEventState().catch(() => { });
     });
 
     s.on("disconnect", () => {
@@ -190,7 +190,7 @@ export function AuctionProvider({ children }) {
     try {
       console.log("Starting login process for:", teamName);
       console.log("API Base URL:", import.meta.env.VITE_API_BASE || "http://localhost:4000");
-      
+
       // backend creates/returns team + token
       const data = await api("/auth/login", {
         method: "POST",
@@ -205,7 +205,7 @@ export function AuctionProvider({ children }) {
       // now that token exists, connect socket & fetch state
       connectSocket();
       await loadEventState();
-      
+
       console.log("Login process completed successfully");
     } catch (error) {
       console.error("Login failed:", error);
@@ -236,8 +236,11 @@ export function AuctionProvider({ children }) {
   }
 
   // Admin endpoints (only if you implement them in backend)
-  async function adminStartAuction() {
-    await api("/admin/start-auction", { method: "POST" });
+  async function adminStartAuction(timerSeconds = 60) {
+    await api("/admin/start-auction", {
+      method: "POST",
+      body: JSON.stringify({ timer: timerSeconds })
+    });
     await loadEventState();
   }
 

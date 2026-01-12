@@ -6,6 +6,7 @@ const CodeEditor = ({ problem, onSubmit, loading }) => {
   const [language, setLanguage] = useState('javascript');
   const [output, setOutput] = useState('');
   const [testResults, setTestResults] = useState(null);
+  const [isRunning, setIsRunning] = useState(false);
 
   const handleEditorChange = (value) => {
     setCode(value);
@@ -13,7 +14,10 @@ const CodeEditor = ({ problem, onSubmit, loading }) => {
 
   const handleRunCode = async () => {
     try {
-      setOutput('Running...');
+      setIsRunning(true);
+      setOutput('Running code...');
+      setTestResults(null);
+      
       // Send code to backend for execution
       const response = await fetch('/api/code/run', {
         method: 'POST',
@@ -30,10 +34,18 @@ const CodeEditor = ({ problem, onSubmit, loading }) => {
       });
 
       const result = await response.json();
-      setOutput(result.output || result.error);
+      
+      if (result.error) {
+        setOutput(`❌ Error: ${result.error}`);
+      } else {
+        setOutput(result.output || 'Code executed successfully');
+      }
+      
       setTestResults(result.testResults);
     } catch (error) {
-      setOutput(`Error: ${error.message}`);
+      setOutput(`❌ Error: ${error.message}`);
+    } finally {
+      setIsRunning(false);
     }
   };
 
@@ -188,7 +200,7 @@ const CodeEditor = ({ problem, onSubmit, loading }) => {
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button
             onClick={handleRunCode}
-            disabled={loading}
+            disabled={isRunning || loading}
             style={{
               flex: 1,
               padding: '1rem',
@@ -196,21 +208,22 @@ const CodeEditor = ({ problem, onSubmit, loading }) => {
               border: '1px solid var(--color-success)',
               color: 'var(--color-success)',
               borderRadius: 'var(--radius-sm)',
-              cursor: 'pointer',
+              cursor: isRunning || loading ? 'not-allowed' : 'pointer',
               fontWeight: 'bold',
-              fontSize: '1rem'
+              fontSize: '1rem',
+              opacity: isRunning || loading ? 0.6 : 1
             }}
           >
-            {loading ? 'Running...' : '▶ Run Code'}
+            {isRunning ? '⏳ Running...' : '▶ Run Code'}
           </button>
 
           <button
             onClick={handleSubmit}
-            disabled={loading}
+            disabled={loading || isRunning}
             className="hero-btn"
-            style={{ flex: 1, padding: '1rem' }}
+            style={{ flex: 1, padding: '1rem', opacity: loading || isRunning ? 0.6 : 1 }}
           >
-            {loading ? 'Submitting...' : '✓ Submit Solution'}
+            {loading ? '⏳ Submitting...' : '✓ Submit Solution'}
           </button>
         </div>
       </div>

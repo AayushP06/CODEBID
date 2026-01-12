@@ -34,8 +34,8 @@ async function requireAdmin(req, res, next) {
 // POST /admin/start-auction
 router.post("/start-auction", requireAdmin, async (req, res) => {
   try {
-    const { problemId } = req.body;
-    
+    const { problemId, timer = 60 } = req.body;
+
     let selectedProblemId = problemId;
     if (!selectedProblemId) {
       // Get a random problem if none specified
@@ -47,12 +47,13 @@ router.post("/start-auction", requireAdmin, async (req, res) => {
       return res.status(400).json({ error: "No problems available" });
     }
 
-    const event = await Event.startAuction(selectedProblemId);
+    const event = await Event.startAuction(selectedProblemId, timer);
 
     // Broadcast state change via socket
     const io = getIO();
     if (io) {
       const eventState = await Event.getCurrentEvent();
+      eventState.endsIn = timer; // Include timer in broadcast
       io.emit("STATE_CHANGED", eventState);
     }
 
@@ -119,7 +120,7 @@ router.get("/problems", requireAdmin, async (req, res) => {
 router.post("/problems", requireAdmin, async (req, res) => {
   try {
     const { title, description, difficulty, testCases, solution } = req.body;
-    
+
     if (!title || !description) {
       return res.status(400).json({ error: "Title and description are required" });
     }
@@ -155,7 +156,7 @@ router.delete("/problems/:id", requireAdmin, async (req, res) => {
 router.post("/reset-event", requireAdmin, async (req, res) => {
   try {
     const event = await Event.updateState('WAITING', null);
-    
+
     // Broadcast state change via socket
     const io = getIO();
     if (io) {

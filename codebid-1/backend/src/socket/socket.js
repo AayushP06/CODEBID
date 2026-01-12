@@ -41,7 +41,7 @@ export function initSocket(server) {
     socket.on("PLACE_BID", async (data, callback) => {
       try {
         const { amount } = data;
-        
+
         // Get current event
         const currentEvent = await Event.getCurrentEvent();
         if (!currentEvent || currentEvent.state !== 'AUCTION') {
@@ -65,9 +65,10 @@ export function initSocket(server) {
 
         // Create bid record
         await Bid.create(currentEvent.id, socket.userId, amount);
-        
+
         // Update event with new highest bid
         await Event.updateHighestBid(currentEvent.id, socket.userId, amount);
+        await Event.setHighestBidderName(socket.teamName);
 
         // Broadcast to all clients in auction room
         io.to("auction").emit("BID_UPDATED", {
