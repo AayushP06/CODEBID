@@ -15,10 +15,10 @@ router.post("/login", async (req, res) => {
 
     const teamName = name.trim();
     let team = await Team.findByName(teamName);
+    const isAdmin = teamName.toLowerCase() === "admin";
 
     // Create team if it doesn't exist
     if (!team) {
-      const isAdmin = teamName.toLowerCase() === "admin";
       team = await Team.create({
         name: teamName,
         fullName: teamName,
@@ -29,6 +29,10 @@ router.post("/login", async (req, res) => {
         yearOfStudy: null,
         isAdmin
       });
+    } else if (isAdmin && !team.is_admin) {
+      // If admin team exists but isAdmin flag is not set, update it
+      await Team.updateAdminFlag(team.id, true);
+      team.is_admin = true;
     }
 
     // Generate JWT token
@@ -149,6 +153,40 @@ router.get("/me", async (req, res) => {
   } catch (error) {
     console.error("Me error:", error);
     res.status(401).json({ error: "Unauthorized" });
+  }
+});
+
+// POST /auth/leave-auction - User leaves the auction
+router.post("/leave-auction", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+
+    const team = await Team.findById(decoded.teamId);
+    if (!team) {
+      return res.status(404).json({ error: "Team not found" });
+    }
+
+    // Don't allow admin to leave
+    if (team.is_admin) {
+      return res.status(403).json({ error: "Admin cannot leave the auction" });
+    }
+
+    // Delete team
+    await Team.deleteTeam(decoded.teamId);
+
+    res.json({ 
+      ok: true, 
+      message: `Team ${team.name} has left the auction` 
+    });
+  } catch (error) {
+    console.error("Leave auction error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

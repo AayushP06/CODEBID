@@ -10,17 +10,67 @@ const AdminDashboard = ({ onBack }) => {
     const [loading, setLoading] = React.useState(false);
     const [currentView, setCurrentView] = React.useState('dashboard'); // 'dashboard' or 'problems'
     const [auctionTimer, setAuctionTimer] = React.useState(60); // Default 60 seconds per problem
+    const [removingTeamId, setRemovingTeamId] = React.useState(null);
 
     // Fetch registered teams
     const fetchTeams = async () => {
         try {
             setLoading(true);
+            console.log('Fetching teams...');
             const teamsData = await api('/admin/teams');
+            console.log('Teams fetched:', teamsData);
             setTeams(Array.isArray(teamsData) ? teamsData : []);
         } catch (error) {
             console.error('Failed to fetch teams:', error);
+            alert(`❌ Failed to fetch teams: ${error.message}`);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Remove team
+    const handleRemoveTeam = async (teamId, teamName) => {
+        console.log('Attempting to remove team:', teamId, teamName);
+        
+        if (!window.confirm(`Are you sure you want to remove team "${teamName}" from the auction?`)) {
+            return;
+        }
+
+        try {
+            setRemovingTeamId(teamId);
+            console.log('Making DELETE request to:', `/admin/teams/${teamId}`);
+            
+            // Check if we have a valid token
+            const token = localStorage.getItem('token');
+            console.log('Auth token exists:', !!token);
+            
+            const response = await api(`/admin/teams/${teamId}`, { method: 'DELETE' });
+            console.log('Remove team response:', response);
+            
+            // Update local state
+            setTeams(teams.filter(t => t.id !== teamId));
+            
+            // Refresh teams from server to ensure consistency
+            await fetchTeams();
+            
+            alert(`✅ Team "${teamName}" removed successfully`);
+        } catch (error) {
+            console.error('Failed to remove team - Full error:', error);
+            
+            // More detailed error handling
+            if (error.message.includes('404')) {
+                alert(`❌ Team not found. It may have already been removed.`);
+            } else if (error.message.includes('403')) {
+                alert(`❌ Cannot remove admin team or insufficient permissions.`);
+            } else if (error.message.includes('401')) {
+                alert(`❌ Authentication failed. Please log in again.`);
+            } else if (error.message.includes('Failed to fetch')) {
+                alert(`❌ Cannot connect to server. Please check if the backend is running.`);
+            } else {
+                alert(`❌ Failed to remove team: ${error.message}`);
+            }
+        } finally {
+            setRemovingTeamId(null);
         }
     };
 
@@ -97,6 +147,38 @@ const AdminDashboard = ({ onBack }) => {
                             }}>
                                 {auction.currentProblem?.difficulty || 'medium'}
                             </div>
+                        </div>
+
+                        {/* Live Auction Timer Display */}
+                        <div style={{
+                            background: auction.timeLeft < 10 ? 'rgba(255, 77, 77, 0.2)' : 'rgba(0, 240, 255, 0.1)',
+                            border: `2px solid ${auction.timeLeft < 10 ? 'var(--color-primary)' : 'var(--color-primary)'}`,
+                            borderRadius: 'var(--radius-md)',
+                            padding: '2rem',
+                            textAlign: 'center',
+                            marginBottom: '1.5rem'
+                        }}>
+                            <div style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', marginBottom: '0.5rem', letterSpacing: '0.1em' }}>
+                                AUCTION TIME REMAINING
+                            </div>
+                            <div style={{
+                                fontSize: '4rem',
+                                fontWeight: 'bold',
+                                color: auction.timeLeft < 10 ? 'var(--color-primary)' : 'var(--color-success)',
+                                animation: auction.timeLeft < 10 ? 'pulse 1s infinite' : 'none'
+                            }}>
+                                {auction.timeLeft || 0}s
+                            </div>
+                            {auction.timeLeft < 10 && auction.timeLeft > 0 && (
+                                <div style={{ 
+                                    marginTop: '0.5rem', 
+                                    fontSize: '0.9rem', 
+                                    color: 'var(--color-primary)',
+                                    fontWeight: 'bold'
+                                }}>
+                                    ⚠️ AUCTION ENDING SOON!
+                                </div>
+                            )}
                         </div>
 
                         {/* Live Bidding Stats */}
@@ -193,9 +275,9 @@ const AdminDashboard = ({ onBack }) => {
             <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <h3 style={{ letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        🏆 LEADERBOARD
+                        🏆 ALL TEAMS
                         <span style={{ fontSize: '0.9em', color: 'var(--color-text-muted)', fontWeight: 'normal' }}>
-                            ({Array.isArray(teams) ? teams.filter(t => !t.is_admin).length : 0} teams)
+                            ({Array.isArray(teams) ? teams.length : 0} total, {Array.isArray(teams) ? teams.filter(t => !t.is_admin).length : 0} players)
                         </span>
                     </h3>
                     <button
@@ -207,17 +289,61 @@ const AdminDashboard = ({ onBack }) => {
                             border: '1px solid var(--color-primary)',
                             padding: '0.5rem 1rem',
                             borderRadius: 'var(--radius-sm)',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            marginRight: '1rem'
                         }}
                     >
                         {loading ? 'REFRESHING...' : 'REFRESH'}
+                    </button>
+                    
+                    <button
+                        onClick={() => {
+                            console.log('Current teams:', teams);
+                            console.log('Auth token:', localStorage.getItem('token'));
+                            console.log('API Base:', import.meta.env.VITE_API_BASE || "http://localhost:4000");
+                        }}
+                        style={{
+                            background: 'transparent',
+                            color: 'var(--color-success)',
+                            border: '1px solid var(--color-success)',
+                            padding: '0.5rem 1rem',
+                            borderRadius: 'var(--radius-sm)',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        DEBUG INFO
+                    </button>
+                    
+                    <button
+                        onClick={async () => {
+                            try {
+                                console.log('Testing API connectivity...');
+                                const response = await api('/health');
+                                console.log('Health check response:', response);
+                                alert('✅ Backend is running and accessible');
+                            } catch (error) {
+                                console.error('Health check failed:', error);
+                                alert(`❌ Backend connection failed: ${error.message}`);
+                            }
+                        }}
+                        style={{
+                            background: 'transparent',
+                            color: 'var(--color-text-muted)',
+                            border: '1px solid var(--color-text-muted)',
+                            padding: '0.5rem 1rem',
+                            borderRadius: 'var(--radius-sm)',
+                            cursor: 'pointer',
+                            marginLeft: '1rem'
+                        }}
+                    >
+                        TEST API
                     </button>
                 </div>
 
                 {/* Leaderboard Header */}
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: '60px 1fr 100px 100px',
+                    gridTemplateColumns: '60px 1fr 100px 100px 120px',
                     gap: '1rem',
                     padding: '0.75rem 1rem',
                     background: 'rgba(0, 240, 255, 0.1)',
@@ -232,43 +358,49 @@ const AdminDashboard = ({ onBack }) => {
                     <div>TEAM</div>
                     <div style={{ textAlign: 'right' }}>SCORE</div>
                     <div style={{ textAlign: 'right' }}>COINS</div>
+                    <div style={{ textAlign: 'center' }}>ACTION</div>
                 </div>
 
-                {teams.filter(t => !t.is_admin).length === 0 ? (
+                {teams.length === 0 ? (
                     <div style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>
                         No teams registered yet
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         {teams
-                            .filter(t => !t.is_admin)
                             .sort((a, b) => (b.score || 0) - (a.score || 0) || (b.coins || 0) - (a.coins || 0))
                             .map((team, index) => (
                                 <div
                                     key={team.id}
                                     style={{
                                         display: 'grid',
-                                        gridTemplateColumns: '60px 1fr 100px 100px',
+                                        gridTemplateColumns: '60px 1fr 100px 100px 120px',
                                         gap: '1rem',
                                         alignItems: 'center',
                                         padding: '1rem',
-                                        background: index === 0 ? 'rgba(255, 215, 0, 0.1)' :
-                                            index === 1 ? 'rgba(192, 192, 192, 0.1)' :
-                                                index === 2 ? 'rgba(205, 127, 50, 0.1)' :
-                                                    'rgba(255, 255, 255, 0.03)',
+                                        background: team.is_admin ? 'rgba(255, 215, 0, 0.1)' :
+                                            index === 0 ? 'rgba(255, 215, 0, 0.1)' :
+                                                index === 1 ? 'rgba(192, 192, 192, 0.1)' :
+                                                    index === 2 ? 'rgba(205, 127, 50, 0.1)' :
+                                                        'rgba(255, 255, 255, 0.03)',
                                         borderRadius: 'var(--radius-sm)',
-                                        border: index < 3 ? `1px solid ${index === 0 ? 'gold' : index === 1 ? 'silver' : '#cd7f32'}` : '1px solid var(--color-border)'
+                                        border: team.is_admin ? '2px solid gold' :
+                                            index < 3 ? `1px solid ${index === 0 ? 'gold' : index === 1 ? 'silver' : '#cd7f32'}` : '1px solid var(--color-border)'
                                     }}
                                 >
                                     <div style={{
                                         fontSize: '1.5rem',
                                         fontWeight: 'bold',
-                                        color: index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? '#cd7f32' : 'var(--color-text-muted)'
+                                        color: team.is_admin ? 'gold' :
+                                            index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? '#cd7f32' : 'var(--color-text-muted)'
                                     }}>
-                                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
+                                        {team.is_admin ? '👑' : 
+                                         index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                                     </div>
                                     <div>
-                                        <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{team.name}</div>
+                                        <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                                            {team.name} {team.is_admin && '(ADMIN)'}
+                                        </div>
                                         <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
                                             Joined {new Date(team.created_at).toLocaleDateString()}
                                         </div>
@@ -287,6 +419,35 @@ const AdminDashboard = ({ onBack }) => {
                                         fontWeight: 'bold'
                                     }}>
                                         {team.coins || 0}
+                                    </div>
+                                    <div style={{ textAlign: 'center' }}>
+                                        {team.is_admin ? (
+                                            <div style={{ 
+                                                fontSize: '0.8rem', 
+                                                color: 'var(--color-text-muted)',
+                                                fontStyle: 'italic'
+                                            }}>
+                                                Protected
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleRemoveTeam(team.id, team.name)}
+                                                disabled={removingTeamId === team.id}
+                                                style={{
+                                                    padding: '0.5rem 0.75rem',
+                                                    background: 'rgba(255, 77, 77, 0.2)',
+                                                    border: '1px solid var(--color-primary)',
+                                                    color: 'var(--color-primary)',
+                                                    borderRadius: 'var(--radius-sm)',
+                                                    cursor: removingTeamId === team.id ? 'not-allowed' : 'pointer',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 'bold',
+                                                    opacity: removingTeamId === team.id ? 0.5 : 1
+                                                }}
+                                            >
+                                                {removingTeamId === team.id ? 'REMOVING...' : '❌ REMOVE'}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -393,9 +554,53 @@ const AdminDashboard = ({ onBack }) => {
                 )}
 
                 {appStatus === 'COMPLETED' && (
-                    <button onClick={startCoding} className="hero-btn" style={{ padding: '1.5rem', fontSize: '1.2rem', width: '100%' }}>
-                        START CODING PHASE
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div style={{
+                            background: 'rgba(0, 255, 157, 0.1)',
+                            border: '2px solid var(--color-success)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '1.5rem',
+                            textAlign: 'center'
+                        }}>
+                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--color-success)', marginBottom: '0.5rem' }}>
+                                ✅ AUCTION COMPLETED
+                            </div>
+                            <div style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
+                                {auction.highestBidderName ? (
+                                    <>
+                                        🏆 {auction.highestBidderName} won "{auction.currentProblem?.title}" for {auction.highestBid} coins
+                                    </>
+                                ) : (
+                                    <>No bids were placed for this problem</>
+                                )}
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={() => adminStartAuction(auctionTimer)}
+                            className="hero-btn" 
+                            style={{ padding: '1.5rem', fontSize: '1.2rem', width: '100%' }}
+                        >
+                            ➡️ NEXT PROBLEM ({auctionTimer}s)
+                        </button>
+
+                        <button 
+                            onClick={startCoding} 
+                            style={{
+                                padding: '1.5rem',
+                                fontSize: '1.2rem',
+                                width: '100%',
+                                background: 'rgba(0, 240, 255, 0.1)',
+                                border: '1px solid var(--color-primary)',
+                                color: 'var(--color-primary)',
+                                borderRadius: 'var(--radius-lg)',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            ⏭️ SKIP TO CODING PHASE
+                        </button>
+                    </div>
                 )}
 
                 {appStatus === 'CODING' && (

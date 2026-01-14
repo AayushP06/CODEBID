@@ -13,6 +13,13 @@ router.get("/state", async (req, res) => {
       return res.status(404).json({ error: "No active event found" });
     }
 
+    // Calculate remaining time if auction is active
+    let endsIn = 0;
+    if (event.state === 'AUCTION' && event.auction_start_time) {
+      const elapsedSeconds = Math.floor((Date.now() - new Date(event.auction_start_time).getTime()) / 1000);
+      endsIn = Math.max(0, (event.auction_timer || 60) - elapsedSeconds);
+    }
+
     const response = {
       state: event.state,
       currentProblem: event.current_problem_id ? {
@@ -27,7 +34,8 @@ router.get("/state", async (req, res) => {
       highestBidderName: event.highest_bidder_name || null,
       auctionStartTime: event.auction_start_time,
       codingStartTime: event.coding_start_time,
-      codingEndTime: event.coding_end_time
+      codingEndTime: event.coding_end_time,
+      endsIn: endsIn
     };
 
     res.json(response);

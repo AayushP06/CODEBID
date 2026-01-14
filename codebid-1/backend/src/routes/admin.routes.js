@@ -1,6 +1,6 @@
 import express from "express";
 import jwt from "jsonwebtoken";
-import { getIO } from "../socket/socket.js";
+import { getIO, startAuctionTimer } from "../socket/socket.js";
 import { Event } from "../db/models/Event.js";
 import { Problem } from "../db/models/Problem.js";
 import { Team } from "../db/models/Team.js";
@@ -48,6 +48,9 @@ router.post("/start-auction", requireAdmin, async (req, res) => {
     }
 
     const event = await Event.startAuction(selectedProblemId, timer);
+
+    // Start the auction timer
+    startAuctionTimer(timer);
 
     // Broadcast state change via socket
     const io = getIO();
@@ -168,6 +171,67 @@ router.post("/reset-event", requireAdmin, async (req, res) => {
   } catch (error) {
     console.error("Reset event error:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /admin/teams/:teamId - Remove a team from auction
+router.delete("/teams/:teamId", requireAdmin, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    
+    console.log(`🗑️ Admin attempting to delete team ID: ${teamId}`);
+
+    // Validate teamId is a number
+    if (!teamId || isNaN(parseInt(teamId))) {
+      return res.status(400).json({ error: "Invalid team ID" });
+    }
+
+    // Verify team exists
+    const team = await Team.findById(parseInt(teamId));
+    if (!team) {
+      console.log(`❌ Team ${teamId} not found`);
+      return res.status(404).json({ error: "Team not found" });
+    }
+
+    console.log(`📋 Found team: ${team.name} (Admin: ${team.is_admin})`);
+
+    // Don't allow removing admin team
+    if (team.is_admin) {
+      console.log(`🚫 Attempted to remove admin team: ${team.name}`);
+      return res.status(403).json({ error: "Cannot remove admin team" });
+    }
+
+    // Delete team from database
+    console.log(`🗑️ Deleting team: ${team.name}`);
+    const deletedTeam = await Team.deleteTeam(parseInt(teamId));
+    
+    if (!deletedTeam) {
+      console.log(`❌ Failed to delete team ${teamId} from database`);
+      return res.status(500).json({ error: "Failed to delete team from database" });
+    }
+
+    console.log(`✅ Successfully deleted team: ${team.name}`);
+
+    // Broadcast team removal via socket
+    const io = getIO();
+    if (io) {
+      io.emit("TEAM_REMOVED", {
+        teamId: parseInt(teamId),
+        teamName: team.name,
+        message: `Team ${team.name} has been removed from the auction`
+      });
+    }
+
+    res.json({ ok: true, message: `Team ${team.name} removed successfully` });
+  } catch (error) {
+    console.error("Delete team error:", error);
+    
+    // Check for specific database errors
+    if (error.code === '23503') {
+      return res.status(400).json({ error: "Cannot delete team: has related records (bids, etc.)" });
+    }
+    
+    res.status(500).json({ error: "Internal server error: " + error.message });
   }
 });
 

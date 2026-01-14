@@ -54,6 +54,7 @@ function reducer(state, action) {
           name: action.payload.name,
           wallet: action.payload.coins,
           score: action.payload.score ?? 0,
+          isAdmin: action.payload.isAdmin ?? false,
           purchasedProblems: action.payload.purchasedProblems ?? [],
         },
       };
@@ -119,8 +120,8 @@ export function AuctionProvider({ children }) {
           highestBid: data.amount,
           highestTeamId: data.teamId,
           highestBidderName: data.teamName,
-          currentProblem: data.problem ?? state.auction.currentProblem,
-          endsIn: data.endsIn, // optional if backend sends
+          currentProblem: data.currentProblem,
+          endsIn: data.timeLeft,
         },
       });
 
@@ -133,6 +134,37 @@ export function AuctionProvider({ children }) {
           timestamp: data.timestamp
         },
       });
+    });
+
+    // Real-time timer updates
+    s.on("TIMER_UPDATE", (data) => {
+      dispatch({
+        type: ACTIONS.HYDRATE_EVENT,
+        payload: {
+          endsIn: data.timeLeft,
+        },
+      });
+    });
+
+    // Wallet updates (when coins are deducted after winning)
+    s.on("WALLET_UPDATED", (data) => {
+      // Update wallet for the specific team
+      if (state.user && state.user.id === data.teamId) {
+        dispatch({
+          type: ACTIONS.UPDATE_WALLET,
+          payload: data.newBalance
+        });
+
+        // Show notification message
+        const pointsMessage = data.pointsAwarded ? ` +${data.pointsAwarded} points awarded!` : '';
+        dispatch({
+          type: ACTIONS.ADD_MESSAGE,
+          payload: {
+            text: `💰 ${data.deducted} coins deducted. ${data.reason}. New balance: ${data.newBalance}.${pointsMessage}`,
+            type: "success"
+          }
+        });
+      }
     });
 
     // Live leaderboard updates
@@ -153,13 +185,45 @@ export function AuctionProvider({ children }) {
     });
 
     s.on("AUCTION_ENDED", (payload) => {
-      // winner announcement message (optional)
+      // Update state to COMPLETED
+      dispatch({
+        type: ACTIONS.HYDRATE_EVENT,
+        payload: {
+          state: "COMPLETED",
+          endsIn: 0,
+        },
+      });
+
+      // Winner announcement message
       if (payload?.winnerTeamName) {
+        // Special message for the winner
+        if (state.user && state.user.name === payload.winnerTeamName) {
+          dispatch({
+            type: ACTIONS.ADD_MESSAGE,
+            payload: { 
+              text: `🎉 CONGRATULATIONS! You won "${payload.problemTitle}" for ${payload.amount} coins!`, 
+              type: "success" 
+            },
+          });
+        } else {
+          dispatch({
+            type: ACTIONS.ADD_MESSAGE,
+            payload: { 
+              text: `🏆 ${payload.problemTitle} won by ${payload.winnerTeamName} for ${payload.amount} coins!`, 
+              type: "info" 
+            },
+          });
+        }
+      } else {
         dispatch({
           type: ACTIONS.ADD_MESSAGE,
-          payload: { text: `Problem won by ${payload.winnerTeamName} for ${payload.amount} coins`, type: "success" },
+          payload: { 
+            text: `⏰ Auction ended with no bids`, 
+            type: "info" 
+          },
         });
       }
+      
       // refresh state after auction ends
       loadEventState().catch(() => { });
     });
@@ -239,6 +303,12 @@ export function AuctionProvider({ children }) {
   }
 
   function placeBid(amount) {
+    // Prevent admin from bidding
+    if (state.user?.isAdmin) {
+      dispatch({ type: ACTIONS.ADD_MESSAGE, payload: { text: "❌ Admin cannot place bids. Only participants can bid.", type: "alert" } });
+      return;
+    }
+
     const s = socketRef.current || connectSocket();
     const problemId = state.auction.currentProblem?.id;
 

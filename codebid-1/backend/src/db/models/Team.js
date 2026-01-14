@@ -53,6 +53,30 @@ export class Team {
         return result.rows[0];
     }
 
+    static async updateScore(id, score) {
+        const result = await pool.query(
+            "UPDATE teams SET score = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
+            [score, id]
+        );
+        return result.rows[0];
+    }
+
+    static async incrementScore(id, points) {
+        const result = await pool.query(
+            "UPDATE teams SET score = COALESCE(score, 0) + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
+            [points, id]
+        );
+        return result.rows[0];
+    }
+
+    static async updateAdminFlag(id, isAdmin) {
+        const result = await pool.query(
+            "UPDATE teams SET is_admin = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
+            [isAdmin, id]
+        );
+        return result.rows[0];
+    }
+
     static async getLeaderboard() {
         const result = await pool.query(
             "SELECT id, name, coins, score FROM teams WHERE is_admin = false ORDER BY score DESC, coins DESC LIMIT 10"
@@ -65,5 +89,24 @@ export class Team {
             "SELECT * FROM teams ORDER BY created_at DESC"
         );
         return result.rows;
+    }
+
+    static async deleteTeam(id) {
+        // First, delete related records to avoid foreign key constraint issues
+        try {
+            // Delete bids made by this team
+            await pool.query("DELETE FROM bids WHERE team_id = $1", [id]);
+            
+            // Delete the team
+            const result = await pool.query(
+                "DELETE FROM teams WHERE id = $1 RETURNING *",
+                [id]
+            );
+            
+            return result.rows[0];
+        } catch (error) {
+            console.error('Error deleting team:', error);
+            throw error;
+        }
     }
 }
